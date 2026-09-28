@@ -1,0 +1,6 @@
+{
+  "name": "OmniCareer VoIP & Job Tracker",
+  "description": "Comprehensive job application tracker and interview organizer featuring softphone telephony, WhatsApp/SMS/Email messaging, automated candidate summary, deadline reminders, and document management.",
+  "requestFramePermissions": ["notifications", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
