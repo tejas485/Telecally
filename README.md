@@ -14,7 +14,6 @@ A full-stack, enterprise-grade telecommunications and career management platform
 
 ## 📽️ Demo & Screenshots
 
-> *Replace the placeholder images in the `./images/` directory with your actual screenshots and screen recording.*
 
 ### 🎬 Screen Recording Walkthrough
 [![OmniCareer Softphone & AI Voice Screening Demo](./images/demo-recording.gif)](./images/demo-recording.mp4)
