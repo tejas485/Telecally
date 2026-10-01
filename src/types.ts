@@ -135,13 +135,15 @@ export interface CallSessionState {
 
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type ColorTheme = 'cyan' | 'indigo' | 'emerald' | 'amber' | 'rose';
-export type FontSizeSetting = 'small' | 'medium' | 'large';
+export type FontSizeSetting = 'small' | 'medium' | 'large' | 'xlarge';
+export type FontFamilySetting = 'inter' | 'roboto' | 'space_grotesk' | 'jakarta' | 'jetbrains' | 'system';
 export type ButtonSizeSetting = 'compact' | 'medium' | 'spacious';
 
 export interface ThemeSettings {
   mode: ThemeMode;
   colorTheme: ColorTheme;
   fontSize: FontSizeSetting;
+  fontFamily: FontFamilySetting;
   buttonSize: ButtonSizeSetting;
 }
 

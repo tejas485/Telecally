@@ -8,13 +8,15 @@ import {
   Check, 
   X, 
   Monitor,
-  Sparkles
+  Sparkles,
+  Sliders
 } from 'lucide-react';
 import { 
   ThemeSettings, 
   ThemeMode, 
   ColorTheme, 
   FontSizeSetting, 
+  FontFamilySetting,
   ButtonSizeSetting 
 } from '../types';
 
@@ -41,9 +43,18 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
     { id: 'rose', name: 'Crimson Rose', bgClass: 'from-rose-500 to-pink-600', borderClass: 'border-rose-500', accentHex: '#f43f5e' },
   ];
 
+  const fontFamilies: { id: FontFamilySetting; name: string; sample: string; desc: string }[] = [
+    { id: 'inter', name: 'Inter UI', sample: 'Aa Bb Cc', desc: 'Modern Clean Sans' },
+    { id: 'jakarta', name: 'Plus Jakarta', sample: 'Aa Bb Cc', desc: 'Premium Geometric' },
+    { id: 'space_grotesk', name: 'Space Grotesk', sample: 'Aa Bb Cc', desc: 'Tech & Modernist' },
+    { id: 'roboto', name: 'Roboto', sample: 'Aa Bb Cc', desc: 'Google Standard' },
+    { id: 'jetbrains', name: 'JetBrains Mono', sample: 'Aa 123 =>', desc: 'Developer Monospace' },
+    { id: 'system', name: 'System UI', sample: 'Aa Bb Cc', desc: 'Native OS Default' },
+  ];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950 p-4 border-b border-slate-800 flex items-center justify-between">
@@ -52,32 +63,35 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
               <Palette className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-white font-bold text-base">Display & Theme Preferences</h2>
-              <p className="text-xs text-slate-400">Customize day/night mode, color palette & sizing</p>
+              <h2 className="text-white font-bold text-base">Appearance & Theme Settings</h2>
+              <p className="text-xs text-slate-400">Customize Day/Night mode, typography font, size & palette</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Settings Body */}
-        <div className="p-5 space-y-5 text-xs">
+        <div className="p-5 space-y-5 text-xs overflow-y-auto">
           
           {/* 1. Day / Night Mode */}
           <div className="space-y-2">
-            <label className="text-slate-400 font-semibold flex items-center gap-1.5">
-              <Sun className="w-3.5 h-3.5 text-amber-400" />
-              <span>Day / Night Appearance:</span>
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-slate-300 font-semibold flex items-center gap-1.5">
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <span>Day / Night Appearance:</span>
+              </label>
+              <span className="text-[10px] text-slate-400">Current: {settings.mode.toUpperCase()}</span>
+            </div>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { id: 'dark', label: 'Night (Dark)', icon: Moon },
-                { id: 'light', label: 'Day (Light)', icon: Sun },
-                { id: 'system', label: 'System Auto', icon: Monitor },
+                { id: 'dark', label: 'Night (Dark)', desc: 'Slate & Obsidian', icon: Moon },
+                { id: 'light', label: 'Day (Light)', desc: 'Crisp & Clean', icon: Sun },
+                { id: 'system', label: 'System Auto', desc: 'Sync with OS', icon: Monitor },
               ].map(opt => {
                 const Icon = opt.icon;
                 const isSelected = settings.mode === opt.id;
@@ -87,22 +101,86 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                     onClick={() => onUpdateSettings({ ...settings, mode: opt.id as ThemeMode })}
                     className={`p-2.5 rounded-xl border text-center flex flex-col items-center gap-1.5 transition-all ${
                       isSelected
-                        ? 'bg-cyan-950 border-cyan-500 text-cyan-300 font-bold shadow-sm'
+                        ? 'bg-cyan-950 border-cyan-500 text-cyan-300 font-bold shadow-sm ring-1 ring-cyan-500/30'
                         : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
-                    <span className="text-[11px]">{opt.label}</span>
+                    <span className="text-[11px] font-semibold">{opt.label}</span>
+                    <span className="text-[9px] text-slate-400">{opt.desc}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* 2. Color Theme Selection */}
+          {/* 2. Font Family Selection */}
           <div className="space-y-2">
-            <label className="text-slate-400 font-semibold flex items-center gap-1.5">
-              <Palette className="w-3.5 h-3.5 text-indigo-400" />
+            <label className="text-slate-300 font-semibold flex items-center gap-1.5">
+              <Type className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Typography Font Family:</span>
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {fontFamilies.map(f => {
+                const isSelected = (settings.fontFamily || 'inter') === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => onUpdateSettings({ ...settings, fontFamily: f.id })}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      isSelected
+                        ? 'bg-cyan-950/70 border-cyan-500 text-cyan-300 font-bold shadow-sm ring-1 ring-cyan-500/30'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-white">{f.name}</span>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400" />}
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono block mt-1">{f.sample}</span>
+                    <span className="text-[9px] text-slate-400 block">{f.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 3. Font Size Option */}
+          <div className="space-y-2">
+            <label className="text-slate-300 font-semibold flex items-center gap-1.5">
+              <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Interface Font Scaling:</span>
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { id: 'small', label: 'Compact', sample: 'Aa (13px)' },
+                { id: 'medium', label: 'Regular', sample: 'Aa (14px)' },
+                { id: 'large', label: 'Large', sample: 'Aa (15.5px)' },
+                { id: 'xlarge', label: 'X-Large', sample: 'Aa (17px)' },
+              ].map(opt => {
+                const isSelected = settings.fontSize === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => onUpdateSettings({ ...settings, fontSize: opt.id as FontSizeSetting })}
+                    className={`p-2.5 rounded-xl border text-center transition-all ${
+                      isSelected
+                        ? 'bg-slate-800 border-cyan-500 text-cyan-300 font-bold shadow-sm ring-1 ring-cyan-500/30'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="text-xs font-semibold">{opt.label}</div>
+                    <span className="text-[10px] block mt-0.5 text-slate-400">{opt.sample}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 4. Color Theme Selection */}
+          <div className="space-y-2">
+            <label className="text-slate-300 font-semibold flex items-center gap-1.5">
+              <Palette className="w-3.5 h-3.5 text-emerald-400" />
               <span>Color Theme Palette:</span>
             </label>
             <div className="grid grid-cols-5 gap-2">
@@ -129,63 +207,31 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
             </div>
           </div>
 
-          {/* 3. Font Size Option */}
+          {/* 5. Button Size Option */}
           <div className="space-y-2">
-            <label className="text-slate-400 font-semibold flex items-center gap-1.5">
-              <Type className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Interface Font Size:</span>
+            <label className="text-slate-300 font-semibold flex items-center gap-1.5">
+              <MousePointerClick className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Button & Touch Target Size:</span>
             </label>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { id: 'small', label: 'Compact', sample: 'Aa' },
-                { id: 'medium', label: 'Default', sample: 'Aa' },
-                { id: 'large', label: 'Comfortable', sample: 'Aa' },
-              ].map(opt => {
-                const isSelected = settings.fontSize === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    onClick={() => onUpdateSettings({ ...settings, fontSize: opt.id as FontSizeSetting })}
-                    className={`p-2.5 rounded-xl border text-center transition-all ${
-                      isSelected
-                        ? 'bg-slate-800 border-cyan-500 text-cyan-300 font-bold shadow-sm'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <div className={opt.id === 'small' ? 'text-xs' : opt.id === 'medium' ? 'text-sm' : 'text-base'}>
-                      {opt.sample}
-                    </div>
-                    <span className="text-[10px] block mt-0.5">{opt.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 4. Button Size Option */}
-          <div className="space-y-2">
-            <label className="text-slate-400 font-semibold flex items-center gap-1.5">
-              <MousePointerClick className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Action Button Size:</span>
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { id: 'compact', label: 'Compact' },
-                { id: 'medium', label: 'Balanced' },
-                { id: 'spacious', label: 'Spacious / Touch' },
+                { id: 'compact', label: 'Compact', desc: 'Dense desktop' },
+                { id: 'medium', label: 'Balanced', desc: 'Standard UI' },
+                { id: 'spacious', label: 'Touch / Spacious', desc: 'Comfortable tap' },
               ].map(opt => {
                 const isSelected = settings.buttonSize === opt.id;
                 return (
                   <button
                     key={opt.id}
                     onClick={() => onUpdateSettings({ ...settings, buttonSize: opt.id as ButtonSizeSetting })}
-                    className={`p-2.5 rounded-xl border text-center text-[11px] transition-all ${
+                    className={`p-2.5 rounded-xl border text-center transition-all ${
                       isSelected
-                        ? 'bg-slate-800 border-cyan-500 text-cyan-300 font-bold shadow-sm'
+                        ? 'bg-slate-800 border-cyan-500 text-cyan-300 font-bold shadow-sm ring-1 ring-cyan-500/30'
                         : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
                     }`}
                   >
-                    {opt.label}
+                    <div className="text-[11px] font-semibold">{opt.label}</div>
+                    <span className="text-[9px] text-slate-400 block">{opt.desc}</span>
                   </button>
                 );
               })}
@@ -194,9 +240,9 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
 
           <button
             onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/20 transition-all"
+            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/20 transition-all cursor-pointer"
           >
-            Apply & Close
+            Apply & Save Preferences
           </button>
 
         </div>

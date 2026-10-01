@@ -1,5 +1,34 @@
 @import "tailwindcss";
 
+/* Base layout & prevent horizontal overflow */
+html, body {
+  background-color: #020617;
+  color: #f8fafc;
+  overflow-x: hidden;
+  width: 100%;
+  min-height: 100%;
+}
+
+/* Font Family preferences */
+[data-font-family="inter"] {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+[data-font-family="roboto"] {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+[data-font-family="space_grotesk"] {
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+[data-font-family="jakarta"] {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+[data-font-family="jetbrains"] {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+[data-font-family="system"] {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
 /* Font sizing preferences */
 [data-font-size="small"] {
   font-size: 13px;
@@ -8,7 +37,10 @@
   font-size: 14px;
 }
 [data-font-size="large"] {
-  font-size: 16px;
+  font-size: 15.5px;
+}
+[data-font-size="xlarge"] {
+  font-size: 17px;
 }
 
 /* Button sizing preferences */

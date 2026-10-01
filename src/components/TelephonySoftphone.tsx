@@ -71,6 +71,7 @@ export const TelephonySoftphone: React.FC<TelephonySoftphoneProps> = ({
 
   const durationTimerRef = useRef<any>(null);
   const simulationTimerRef = useRef<any>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
 
   // Sync when selected application changes
   useEffect(() => {
@@ -82,7 +83,7 @@ export const TelephonySoftphone: React.FC<TelephonySoftphoneProps> = ({
     }
   }, [selectedApplication]);
 
-  // Call duration counter
+  // Call duration counter & hardware stream cleanup
   useEffect(() => {
     if (callState === 'connected') {
       durationTimerRef.current = setInterval(() => {
@@ -93,6 +94,11 @@ export const TelephonySoftphone: React.FC<TelephonySoftphoneProps> = ({
     }
     return () => {
       if (durationTimerRef.current) clearInterval(durationTimerRef.current);
+      if (simulationTimerRef.current) clearTimeout(simulationTimerRef.current);
+      if (micStreamRef.current) {
+        try { micStreamRef.current.getTracks().forEach(t => t.stop()); } catch {}
+        micStreamRef.current = null;
+      }
     };
   }, [callState]);
 
@@ -116,6 +122,16 @@ export const TelephonySoftphone: React.FC<TelephonySoftphoneProps> = ({
     setAnalysisResult(null);
     setTranscriptLines([]);
     setSipLogs([]);
+
+    // Acquire microphone hardware stream so browser green dot/ball comes on
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        micStreamRef.current = stream;
+        addSipTrace(`WebRTC MediaTrack: Active Hardware Microphone Stream Attached`);
+      }).catch(err => {
+        addSipTrace(`WebRTC MediaTrack Note: ${err.message || 'Microphone hardware stream note'}`);
+      });
+    }
 
     addSipTrace(`SIP INVITE sip:${targetNumber.replace(/\D/g, '')}@telcovibe-sbc.carrier.net SIP/2.0`);
     addSipTrace(`Content-Type: application/sdp (m=audio RTP/AVP 111 Opus/48000/2)`);
@@ -187,6 +203,10 @@ export const TelephonySoftphone: React.FC<TelephonySoftphoneProps> = ({
   const endCall = async () => {
     telephonyAudio.playHangupTone();
     if (simulationTimerRef.current) clearTimeout(simulationTimerRef.current);
+    if (micStreamRef.current) {
+      try { micStreamRef.current.getTracks().forEach(t => t.stop()); } catch {}
+      micStreamRef.current = null;
+    }
     
     addSipTrace(`SIP BYE sip:${targetNumber.replace(/\D/g, '')} SIP/2.0`);
     addSipTrace(`SIP/2.0 200 OK - Call Terminated normally (Duration: ${callDuration}s)`);

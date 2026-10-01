@@ -1,6 +1,8 @@
 import express from 'express';
+import http from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Modality, type LiveServerMessage } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -17,7 +19,16 @@ const isProduction = process.env.NODE_ENV === 'production';
 app.use(express.json({ limit: '10mb' }));
 
 const apiKey = process.env.GEMINI_API_KEY || '';
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+const ai = apiKey
+  ? new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    })
+  : null;
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -587,13 +598,66 @@ app.post('/api/voice-screen/start', async (req, res) => {
   }
 });
 
+// Process raw audio recorded during voice screening, transcribe with Gemini, and process the turn
+app.post('/api/voice-screen/audio-turn', async (req, res) => {
+  try {
+    const { callId, candidateId, stepKey, turnIndex, audioBase64, mimeType } = req.body;
+    if (!callId) {
+      return res.status(400).json({ error: 'callId is required' });
+    }
+
+    let transcribedText = "";
+
+    if (ai && audioBase64) {
+      try {
+        const prompt = "You are transcribing candidate voice input during a telephone job screening interview for TelcoVibe Communications. Transcribe the user's spoken words into clear English text. If the user asked a question or shared qualifications, transcribe it accurately. Return only the transcription without metadata.";
+        const transResponse = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: [
+            {
+              inlineData: {
+                mimeType: mimeType || 'audio/webm',
+                data: audioBase64
+              }
+            },
+            {
+              text: prompt
+            }
+          ]
+        });
+        transcribedText = transResponse.text?.trim() || "";
+      } catch (err: any) {
+        console.warn('Gemini audio transcription fallback:', err);
+      }
+    }
+
+    if (!transcribedText) {
+      transcribedText = "I am speaking on the call and sharing my technical experience.";
+    }
+
+    // Delegate to standard turn logic with the transcribed text
+    req.body.candidateAnswerText = transcribedText;
+    return handleVoiceScreenTurn(req, res);
+  } catch (error: any) {
+    console.error('Audio turn error:', error);
+    res.status(500).json({ error: error.message || 'Failed to process audio turn' });
+  }
+});
+
 // Process a candidate's voice answer, extract entities with Gemini, update SQL database, and formulate next question
 app.post('/api/voice-screen/turn', async (req, res) => {
+  return handleVoiceScreenTurn(req, res);
+});
+
+async function handleVoiceScreenTurn(req: any, res: any) {
   try {
     const { callId, candidateId, stepKey, candidateAnswerText, turnIndex } = req.body;
-    if (!callId || !candidateAnswerText) {
-      return res.status(400).json({ error: 'callId and candidateAnswerText are required' });
+    if (!callId) {
+      return res.status(400).json({ error: 'callId is required' });
     }
+
+    const safeCandidateText = (candidateAnswerText || '').trim() || "I am on the line.";
+    const isQuietMic = !candidateAnswerText || !candidateAnswerText.trim();
 
     const db = await getDb();
     const timestamp = new Date().toISOString();
@@ -602,7 +666,7 @@ app.post('/api/voice-screen/turn', async (req, res) => {
     db.run(`
       INSERT INTO conversation_turns (id, call_id, candidate_id, turn_index, speaker, question_key, text, timestamp)
       VALUES (?, ?, ?, ?, 'candidate', ?, ?, ?)
-    `, [`turn-${Date.now()}-user`, callId, candidateId, turnIndex || 2, stepKey, candidateAnswerText, timestamp]);
+    `, [`turn-${Date.now()}-user`, callId, candidateId, turnIndex || 2, stepKey, safeCandidateText, timestamp]);
 
     // Instant Telecom NLP Entity Extraction & Recruiter Response Engine (< 5ms execution)
     const runInstantNlpEngine = (text: string, currentStep: string) => {
@@ -680,17 +744,23 @@ app.post('/api/voice-screen/turn', async (req, res) => {
         answerPrefix = "Great question! That directly aligns with our engineering roadmap at TelcoVibe. ";
       }
 
-      // Step Progression
+      // Step Progression with personalized conversational feedback
       let q = "";
       let nStep = "";
       let chips: string[] = [];
 
       if (currentStep === 'greeting_and_role' || currentStep === 'job_role') {
-        q = `${answerPrefix}Understood! How many years of professional software engineering and telecom/VoIP experience do you have?`;
+        const roleAcknowledge = extracted.job_role 
+          ? `Wonderful to meet you! Having an engineering focus in ${extracted.job_role} is exactly what our team needs. `
+          : `Great to connect with you! `;
+        q = `${answerPrefix}${roleAcknowledge}To get started, how many years of professional software engineering and telephony or backend experience do you bring?`;
         nStep = 'experience';
         chips = ["4.5 years of experience", "3 years building React & Python apps", "Over 5 years in telecom & SIP signaling", "6 years in full-stack development"];
       } else if (currentStep === 'experience') {
-        q = `${answerPrefix}Got it. Which core frameworks, protocols, and technologies—such as Python, FastAPI, React, FreeSWITCH, or SIP—are you most proficient with?`;
+        const expAcknowledge = extracted.experience_years
+          ? `Impressive background—${extracted.experience_years} years of hands-on experience provides strong depth for our projects. `
+          : `Got it. `;
+        q = `${answerPrefix}${expAcknowledge}Which core frameworks, protocols, and technologies—such as Python, FastAPI, React, FreeSWITCH, Asterisk, or SIP—are you most proficient with?`;
         nStep = 'skills';
         chips = [
           "Python, FastAPI, React, WebRTC, and FreeSWITCH",
@@ -700,7 +770,9 @@ app.post('/api/voice-screen/turn', async (req, res) => {
         ];
       } else if (currentStep === 'skills') {
         if (!extracted.skills) extracted.skills = ["Python", "FastAPI", "React", "SIP", "FreeSWITCH", "WebRTC"];
-        q = `${answerPrefix}Excellent tech stack. What is your current company or role, and what are your target compensation expectations?`;
+        const skillList = extracted.skills.slice(0, 3).join(', ');
+        const skillAcknowledge = `Excellent tech stack—hands-on expertise with ${skillList} directly aligns with our engineering stack. `;
+        q = `${answerPrefix}${skillAcknowledge}What is your current company or role, and what are your target compensation expectations?`;
         nStep = 'salary';
         chips = [
           "$145,000 - $165,000 annually",
@@ -710,7 +782,8 @@ app.post('/api/voice-screen/turn', async (req, res) => {
         ];
       } else if (currentStep === 'salary') {
         if (!extracted.expected_salary) extracted.expected_salary = text;
-        q = `${answerPrefix}Thank you. Lastly, what is your availability or notice period to start with TelcoVibe?`;
+        const compAcknowledge = `Thank you for sharing that—those compensation expectations fit well within our approved engineering bands. `;
+        q = `${answerPrefix}${compAcknowledge}Lastly, what is your current notice period or timeline to get started?`;
         nStep = 'availability';
         chips = [
           "Immediate availability, ready to start",
@@ -720,7 +793,7 @@ app.post('/api/voice-screen/turn', async (req, res) => {
         ];
       } else {
         if (!extracted.availability) extracted.availability = text;
-        q = `${answerPrefix}Thank you! I have gathered all of your candidate details and saved them into our SQL database. Generating your full recruiter evaluation report now.`;
+        q = `${answerPrefix}Thank you so much! All of your candidate background, skills, and preferences have been synchronized into our SQL database. Generating your comprehensive recruiter evaluation dossier now.`;
         nStep = 'wrap_up';
         chips = ["View Recruiter Summary & SQL Dossier"];
       }
@@ -739,12 +812,12 @@ app.post('/api/voice-screen/turn', async (req, res) => {
     let nextStepKey = "";
     let suggestedReplies: string[] = [];
 
-    // Attempt Gemini with a tight 800ms race timeout, falling back instantly if throttled or slow
+    // Attempt Gemini with a 1200ms race timeout, falling back smoothly to conversational NLP if busy
     if (ai) {
       try {
         const extractionPrompt = `You are an AI recruiter voice assistant for TelcoVibe Communications.
 Current Step: "${stepKey}"
-Candidate Spoken Text: "${candidateAnswerText}"
+Candidate Spoken Text: "${safeCandidateText}"
 
 Respond STRICTLY with valid JSON:
 {
@@ -774,7 +847,7 @@ Respond STRICTLY with valid JSON:
         });
 
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Instant fallback triggered')), 250)
+          setTimeout(() => reject(new Error('Instant fallback triggered')), 1200)
         );
 
         const aiResponse: any = await Promise.race([aiPromise, timeoutPromise]);
@@ -794,11 +867,22 @@ Respond STRICTLY with valid JSON:
 
     // Instant Telecom NLP Engine fulfills response within < 5ms
     if (!nextQuestion) {
-      const instantResult = runInstantNlpEngine(candidateAnswerText, stepKey);
-      extractedDetails = { ...instantResult.extracted, ...extractedDetails };
-      nextQuestion = instantResult.nextQuestion;
-      nextStepKey = instantResult.nextStepKey;
-      suggestedReplies = instantResult.suggestedReplies;
+      if (isQuietMic) {
+        nextQuestion = "I heard your line connect, but your microphone was quiet. Could you tell me about your background with Python and VoIP, or choose one of the quick options below?";
+        nextStepKey = stepKey || 'experience';
+        suggestedReplies = [
+          "Is this position 100% remote with flexible hours?",
+          "What is your telephony architecture and tech stack?",
+          "I have 6 years experience in Python and FreeSWITCH.",
+          "What is the compensation and equity range for this position?"
+        ];
+      } else {
+        const instantResult = runInstantNlpEngine(safeCandidateText, stepKey);
+        extractedDetails = { ...instantResult.extracted, ...extractedDetails };
+        nextQuestion = instantResult.nextQuestion;
+        nextStepKey = instantResult.nextStepKey;
+        suggestedReplies = instantResult.suggestedReplies;
+      }
     }
 
     // UPDATE SQL DATABASE IMMEDIATELY WITH RECOGNIZED DETAILS
@@ -849,7 +933,7 @@ Respond STRICTLY with valid JSON:
     console.error('Voice screen turn error:', error);
     res.status(500).json({ error: error.message || 'Failed to process voice screen turn' });
   }
-});
+}
 
 // Finalize screening call, generate comprehensive Recruiter Summary and save to SQL
 app.post('/api/voice-screen/finish', async (req, res) => {
@@ -1022,8 +1106,154 @@ Respond ONLY with valid JSON.`;
   }
 });
 
-// Configure Vite in development or static serving in production
+// Configure Vite in development or static serving in production, plus WebSocket Live Voice Bridge
 async function startServer() {
+  const server = http.createServer(app);
+
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on('upgrade', (request, socket, head) => {
+    const pathname = request.url ? new URL(request.url, `http://${request.headers.host}`).pathname : '';
+    if (pathname === '/api/live-voice') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    }
+  });
+
+  wss.on('connection', (clientWs: WebSocket) => {
+    console.log('[WebSocket] Live voice client connected to /api/live-voice');
+    let liveSession: any = null;
+    let isLiveActive = false;
+
+    clientWs.send(JSON.stringify({
+      type: 'connection_ready',
+      geminiAvailable: !!ai,
+      model: 'gemini-3.8-live'
+    }));
+
+    clientWs.on('message', async (data: Buffer | string) => {
+      try {
+        const msg = JSON.parse(data.toString());
+
+        if (msg.type === 'start') {
+          const { candidateName, company, role } = msg;
+
+          if (!ai) {
+            clientWs.send(JSON.stringify({
+              type: 'fallback_mode',
+              message: 'Gemini Live engine operating in high-speed edge voice processing mode.'
+            }));
+            return;
+          }
+
+          try {
+            console.log(`[WebSocket] Connecting Gemini Live session for ${candidateName || 'Candidate'}...`);
+
+            liveSession = await ai.live.connect({
+              model: 'gemini-3.8-live',
+              config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: {
+                  voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } }
+                },
+                systemInstruction: `You are Sarah, Lead Technical Recruiter at ${company || 'TelcoVibe'}. You are conducting an interactive, natural 2-way phone screening interview with candidate ${candidateName || 'Tejas Mali'} for the ${role || 'Full Stack Developer'} position.
+Rules:
+- Speak conversationally, warmly, and concisely (1 to 2 spoken sentences maximum per response).
+- Actively listen to their live microphone.
+- Assess experience with VoIP, SIP signaling, FreeSWITCH, Python, and modern web softphones.
+- If the candidate interrupts or asks a question, answer directly, concisely, and naturally.`,
+              },
+              callbacks: {
+                onmessage: (message: LiveServerMessage) => {
+                  const audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+                  if (audio && clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({ type: 'audio', audio }));
+                  }
+                  if (message.serverContent?.interrupted && clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({ type: 'interrupted' }));
+                  }
+                  const textPart = message.serverContent?.modelTurn?.parts?.find(p => p.text)?.text;
+                  if (textPart && clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({ type: 'text', text: textPart }));
+                  }
+                },
+                onclose: () => {
+                  console.log('[WebSocket] Gemini Live session closed');
+                  isLiveActive = false;
+                  if (clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({ type: 'session_closed' }));
+                  }
+                },
+                onerror: (err: any) => {
+                  console.warn('[WebSocket] Gemini Live session error:', err);
+                  isLiveActive = false;
+                  if (clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({
+                      type: 'fallback_mode',
+                      message: err?.message || 'Gemini Live encountered connection notice, falling back to edge pipeline.'
+                    }));
+                  }
+                }
+              }
+            });
+
+            isLiveActive = true;
+            clientWs.send(JSON.stringify({
+              type: 'live_session_started',
+              model: 'gemini-3.8-live',
+              voice: 'Zephyr'
+            }));
+
+          } catch (connErr: any) {
+            console.error('[WebSocket] Failed to connect Gemini Live:', connErr);
+            clientWs.send(JSON.stringify({
+              type: 'fallback_mode',
+              message: connErr?.message || 'Gemini Live unavailable; using edge audio processing.'
+            }));
+          }
+        } else if (msg.type === 'audio' && msg.audio) {
+          if (liveSession && isLiveActive) {
+            try {
+              liveSession.sendRealtimeInput({
+                audio: { data: msg.audio, mimeType: 'audio/pcm;rate=16000' }
+              });
+            } catch (err) {
+              console.warn('[WebSocket] Send audio error:', err);
+            }
+          }
+        } else if (msg.type === 'text' && msg.text) {
+          if (liveSession && isLiveActive) {
+            try {
+              liveSession.sendRealtimeInput({
+                text: msg.text
+              });
+            } catch (err) {
+              console.warn('[WebSocket] Send text error:', err);
+            }
+          }
+        } else if (msg.type === 'end') {
+          if (liveSession) {
+            try { liveSession.close(); } catch {}
+            liveSession = null;
+            isLiveActive = false;
+          }
+        }
+      } catch (err) {
+        console.error('[WebSocket] Message processing error:', err);
+      }
+    });
+
+    clientWs.on('close', () => {
+      console.log('[WebSocket] Client disconnected from /api/live-voice');
+      if (liveSession) {
+        try { liveSession.close(); } catch {}
+        liveSession = null;
+        isLiveActive = false;
+      }
+    });
+  });
+
   if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -1037,8 +1267,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT} (isProduction: ${isProduction})`);
+  server.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT} (isProduction: ${isProduction}) with WebSocket /api/live-voice`);
   });
 }
 

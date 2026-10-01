@@ -18,6 +18,7 @@ import { ApplicationDetailModal } from './components/ApplicationDetailModal';
 import { VoiceScreeningTestModal } from './components/VoiceScreeningTestModal';
 import { SqlExplorerModal } from './components/SqlExplorerModal';
 import { ThemeSettingsModal } from './components/ThemeSettingsModal';
+import { Sidebar } from './components/Sidebar';
 
 import { 
   JobApplication, 
@@ -33,7 +34,7 @@ import {
 
 import { initialApplications, initialCandidateProfile, initialDocuments } from './utils/initialData';
 import { reminderManager } from './utils/reminderManager';
-import { PhoneForwarded, Sparkles, MessageSquare, Calendar, FileText, Bell, Database, Bot, Palette } from 'lucide-react';
+import { PhoneForwarded, Sparkles, MessageSquare, Calendar, FileText, Bell, Database, Bot, Palette, PhoneCall } from 'lucide-react';
 
 export default function App() {
   // Theme & Appearance Preferences
@@ -46,13 +47,47 @@ export default function App() {
       mode: 'dark',
       colorTheme: 'cyan',
       fontSize: 'medium',
+      fontFamily: 'inter',
       buttonSize: 'medium'
     };
   });
 
   useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute('data-font-family', themeSettings.fontFamily || 'inter');
+    root.setAttribute('data-font-size', themeSettings.fontSize);
+    root.setAttribute('data-color-theme', themeSettings.colorTheme);
+    root.setAttribute('data-button-size', themeSettings.buttonSize);
+
+    if (themeSettings.mode === 'light') {
+      root.classList.add('theme-light');
+      document.body.classList.remove('bg-slate-950');
+      document.body.classList.add('bg-slate-100');
+    } else {
+      root.classList.remove('theme-light');
+      document.body.classList.remove('bg-slate-100');
+      document.body.classList.add('bg-slate-950');
+    }
     localStorage.setItem('omnicareer_theme_settings', JSON.stringify(themeSettings));
   }, [themeSettings]);
+
+  const handleToggleThemeMode = () => {
+    setThemeSettings(prev => ({
+      ...prev,
+      mode: prev.mode === 'light' ? 'dark' : 'light'
+    }));
+  };
+
+  // Open/Close Sidebar Navigation
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Test Call Launch Helper
+  const [voiceScreenAutoStart, setVoiceScreenAutoStart] = useState(false);
+
+  const handleLaunchTestCall = (autoStart: boolean = true) => {
+    setVoiceScreenAutoStart(autoStart);
+    setIsVoiceScreenOpen(true);
+  };
 
   // SQL Database Candidates state
   const [sqlCandidates, setSqlCandidates] = useState<SqlCandidate[]>([]);
@@ -257,25 +292,39 @@ export default function App() {
       }`}
     >
       
-      {/* Top Navigation */}
-      <Header
-        applications={applications}
-        onOpenSoftphone={(app) => {
-          setSelectedSoftphoneApp(app || applications[0]);
+      {/* Collapsible Left Operations Sidebar */}
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        onOpenVoiceScreen={() => handleLaunchTestCall(false)}
+        onLaunchTestCall={() => handleLaunchTestCall(true)}
+        onOpenSoftphone={() => {
+          setSelectedSoftphoneApp(applications[0]);
           setIsSoftphoneOpen(true);
         }}
-        onOpenVoiceScreen={() => setIsVoiceScreenOpen(true)}
         onOpenSql={() => setIsSqlExplorerOpen(true)}
-        onOpenTheme={() => setIsThemeOpen(true)}
-        onOpenNewApp={() => setIsNewAppOpen(true)}
-        onOpenDocuments={() => setIsDocumentsOpen(true)}
         onOpenSchedule={() => setIsScheduleOpen(true)}
+        onOpenDocuments={() => setIsDocumentsOpen(true)}
         onOpenProfile={() => setIsProfileOpen(true)}
+        onOpenNewApp={() => setIsNewAppOpen(true)}
+        onOpenTheme={() => setIsThemeOpen(true)}
+        sqlCandidateCount={sqlCandidates.length}
+        isSoftphoneActive={isSoftphoneOpen}
+        themeSettings={themeSettings}
+        onToggleThemeMode={handleToggleThemeMode}
+      />
+
+      {/* Top Navigation - Search & Notifications Only */}
+      <Header
+        applications={applications}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        isSoftphoneActive={isSoftphoneOpen}
-        sqlCandidateCount={sqlCandidates.length}
-        themeSettings={themeSettings}
+        onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
+        isSidebarOpen={isSidebarOpen}
+        onSelectApplicationFromAlert={(app) => {
+          setSelectedSoftphoneApp(app);
+          setIsSoftphoneOpen(true);
+        }}
       />
 
       {/* Main Content Dashboard */}
@@ -295,26 +344,26 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm text-white">AI Voice-Over Interviewer & SQL Test Suite Ready</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 font-mono">
-                  11 Test Candidates in SQL
+                  {sqlCandidates.length} Candidates in SQL
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Experience voice-over questions, entity extraction, recurring candidate recognition & live SQL database sync.
+                2-way conversational voice AI, speech understanding, live recipient extraction & relational SQL database sync.
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsVoiceScreenOpen(true)}
-              className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-cyan-600/20 flex items-center gap-1.5 transition-all"
+              onClick={() => handleLaunchTestCall(true)}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all transform hover:scale-105 active:scale-95 cursor-pointer"
             >
-              <Bot className="w-3.5 h-3.5" />
-              <span>Launch Voice Interview Test</span>
+              <PhoneCall className="w-4 h-4 animate-bounce" />
+              <span>📞 Start AI Test Call</span>
             </button>
             <button
               onClick={() => setIsSqlExplorerOpen(true)}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all"
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Database className="w-3.5 h-3.5" />
               <span>Inspect SQL Tables</span>
@@ -388,40 +437,21 @@ export default function App() {
 
       </main>
 
-      {/* Floating Action Buttons */}
-      <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-2.5 items-end">
-        <button
-          onClick={() => setIsVoiceScreenOpen(true)}
-          className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white shadow-xl shadow-teal-600/30 border border-teal-400/40 flex items-center gap-2 font-bold text-xs tracking-wide transition-all transform hover:scale-105"
-          title="Interactive Voice Interview & Test Script"
-        >
-          <Bot className="w-4 h-4 animate-pulse" />
-          <span>AI Voice Screener</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setSelectedSoftphoneApp(applications[0]);
-            setIsSoftphoneOpen(true);
-          }}
-          className="p-3.5 rounded-2xl bg-gradient-to-tr from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-2xl shadow-cyan-600/40 border border-cyan-400/40 flex items-center gap-2 font-bold text-xs tracking-wide transition-all transform hover:scale-105"
-          title="Open WebRTC Softphone"
-        >
-          <PhoneForwarded className="w-5 h-5" />
-          <span className="hidden sm:inline">Softphone Dialer</span>
-        </button>
-      </div>
-
       {/* MODALS */}
 
       {/* 1. Interactive AI Voice Screening & Test Script Modal */}
       <VoiceScreeningTestModal
         isOpen={isVoiceScreenOpen}
-        onClose={() => setIsVoiceScreenOpen(false)}
+        autoStartOnOpen={voiceScreenAutoStart}
+        onClose={() => {
+          setIsVoiceScreenOpen(false);
+          setVoiceScreenAutoStart(false);
+        }}
         sqlCandidates={sqlCandidates}
         onRefreshSqlData={fetchSqlCandidates}
         onOpenSqlExplorer={() => {
           setIsVoiceScreenOpen(false);
+          setVoiceScreenAutoStart(false);
           setIsSqlExplorerOpen(true);
         }}
       />
